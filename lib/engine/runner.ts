@@ -20,7 +20,8 @@ export async function runSingleQuery(client: RunnerClient, spec: QuerySpec, opts
   try {
     queryUuid = await client.createQuery(spec)
   } catch (e) {
-    return errorResult(now() - t0, queryUuid, (e as Error).message)
+    const failMs = now() - t0
+    return errorResult(failMs, failMs, queryUuid, (e as Error).message)
   }
   const submitMs = now() - t0
 
@@ -30,15 +31,15 @@ export async function runSingleQuery(client: RunnerClient, spec: QuerySpec, opts
   while (true) {
     const pollStart = now()
     if (pollStart - waitStart > timeoutMs) {
-      return { status: 'timeout', timings: timings(submitMs, null, null, now() - waitStart, 0, now() - t0), lightdashQueryUuid: queryUuid, serverPerf: null, rowCount: null, errorMessage: `Timed out after ${timeoutMs}ms` }
+      return { status: 'timeout', timings: timings(submitMs, null, null, pollStart - waitStart, 0, pollStart - t0), lightdashQueryUuid: queryUuid, serverPerf: null, rowCount: null, errorMessage: `Timed out after ${timeoutMs}ms` }
     }
     try {
       result = await client.getResults(queryUuid!, 1, pageSize)
     } catch (e) {
-      return errorResult(now() - t0, queryUuid, (e as Error).message)
+      return errorResult(submitMs, now() - t0, queryUuid, (e as Error).message)
     }
     if (result.status === READY) break
-    if (ERROR_STATES.has(result.status)) return errorResult(now() - t0, queryUuid, result.error ?? `status: ${result.status}`)
+    if (ERROR_STATES.has(result.status)) return errorResult(submitMs, now() - t0, queryUuid, result.error ?? `status: ${result.status}`)
     await sleep(delay)
     delay = Math.min(Math.round(delay * 1.5), 2000)
   }
@@ -66,6 +67,6 @@ export async function runSingleQuery(client: RunnerClient, spec: QuerySpec, opts
 function timings(submitMs: number, q: number | null, w: number | null, pollOverheadMs: number, resultsFetchMs: number, totalWallClockMs: number) {
   return { submitMs, queueTimeMs: q, warehouseExecMs: w, pollOverheadMs, resultsFetchMs, totalWallClockMs }
 }
-function errorResult(totalWallClockMs: number, uuid: string | null, msg: string): ExecutionResult {
-  return { status: 'error', timings: timings(0, null, null, 0, 0, totalWallClockMs), lightdashQueryUuid: uuid, serverPerf: null, rowCount: null, errorMessage: msg }
+function errorResult(submitMs: number, totalWallClockMs: number, uuid: string | null, msg: string): ExecutionResult {
+  return { status: 'error', timings: timings(submitMs, null, null, 0, 0, totalWallClockMs), lightdashQueryUuid: uuid, serverPerf: null, rowCount: null, errorMessage: msg }
 }

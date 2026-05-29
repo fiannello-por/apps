@@ -34,6 +34,8 @@ test('error status from results yields error result', async () => {
   const r = await runSingleQuery(client, { endpointType: 'sql', sql: 'x' }, { now, sleep: async () => {}, timeoutMs: 45000 })
   expect(r.status).toBe('error')
   expect(r.errorMessage).toBe('boom')
+  // submitMs measured before the error must be preserved, not zeroed
+  expect(r.timings.submitMs).toBe(10)
 })
 
 test('timeout when never ready', async () => {
