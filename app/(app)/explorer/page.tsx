@@ -62,6 +62,7 @@ export default function ExplorerPage() {
           testRunId,
           iterationIndex: 0,
           spec,
+          includeRaw: true,
         }),
       })
       if (!runRes.ok) {

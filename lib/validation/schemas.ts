@@ -30,6 +30,7 @@ export const runInput = z.object({
   testRunId: z.string().uuid().optional(),
   iterationIndex: z.number().default(0),
   spec: querySpecSchema,
+  includeRaw: z.boolean().optional(),
 })
 
 export const testRunInput = z.object({
