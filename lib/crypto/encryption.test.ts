@@ -18,3 +18,14 @@ test('tampered ciphertext fails to decrypt', () => {
   const bad = c.slice(0, -2) + (c.endsWith('aa') ? 'bb' : 'aa')
   expect(() => decrypt(bad)).toThrow()
 })
+
+test('malformed payload throws a deliberate error', () => {
+  expect(() => decrypt('not-a-valid-payload')).toThrow('Invalid encrypted payload format')
+})
+
+test('missing or wrong-length key throws', () => {
+  const prev = process.env.ENCRYPTION_KEY
+  process.env.ENCRYPTION_KEY = 'tooshort'
+  expect(() => encrypt('x')).toThrow('ENCRYPTION_KEY must be 64 hex chars')
+  process.env.ENCRYPTION_KEY = prev
+})
