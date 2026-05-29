@@ -1,26 +1,30 @@
 import NextAuth from 'next-auth'
-import Credentials from 'next-auth/providers/credentials'
-import bcrypt from 'bcryptjs'
-import { eq } from 'drizzle-orm'
+import Google from 'next-auth/providers/google'
 import { authConfig } from './config'
 import { getDb } from '@/lib/db/client'
 import { users } from '@/lib/db/schema'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  providers: [
-    Credentials({
-      credentials: { email: {}, password: {} },
-      async authorize(creds) {
-        const email = String(creds?.email ?? '')
-        const password = String(creds?.password ?? '')
-        if (!email || !password) return null
+  providers: [Google],
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt({ token, account, profile }) {
+      // On initial Google sign-in, upsert the user into our own users table and
+      // stamp our internal id onto the token so the rest of the app (e.g.
+      // connections.createdBy) can reference a stable users.id.
+      if (account && profile?.email) {
         const db = getDb()
-        const [u] = await db.select().from(users).where(eq(users.email, email)).limit(1)
-        if (!u) return null
-        if (!(await bcrypt.compare(password, u.passwordHash))) return null
-        return { id: u.id, email: u.email, name: u.name ?? undefined }
-      },
-    }),
-  ],
+        const name = (profile.name as string | undefined) ?? null
+        const image = (profile as { picture?: string }).picture ?? null
+        const [row] = await db
+          .insert(users)
+          .values({ email: profile.email, name, image })
+          .onConflictDoUpdate({ target: users.email, set: { name, image } })
+          .returning({ id: users.id })
+        if (row) token.id = row.id
+      }
+      return token
+    },
+  },
 })

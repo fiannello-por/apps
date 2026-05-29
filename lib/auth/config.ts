@@ -8,12 +8,9 @@ export const authConfig = {
     authorized({ auth }) {
       return !!auth?.user
     },
-    jwt({ token, user }) {
-      if (user) token.id = user.id
-      return token
-    },
     session({ session, token }) {
-      // token.sub is always set by Auth.js to the user id; token.id is our explicit copy.
+      // token.id is our internal users.id, set by the jwt callback in lib/auth/index.ts
+      // on sign-in; token.sub is Google's id as a fallback.
       if (session.user) session.user.id = (token.id ?? token.sub) as string
       return session
     },
