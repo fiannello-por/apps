@@ -43,6 +43,7 @@ export default function ConnectionsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load on mount
     fetchConnections()
   }, [fetchConnections])
 

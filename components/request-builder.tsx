@@ -1,5 +1,10 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect --
+   The data-loading effects below intentionally reset dependent UI state
+   (clearing stale options + setting a loading flag) the moment the connection,
+   explore, or endpoint changes, before the async fetch resolves. */
+
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'

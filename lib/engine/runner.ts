@@ -1,8 +1,18 @@
-import type { ExecutionResult, QuerySpec } from './types'
+import type { ExecutionResult, QuerySpec, ServerPerformance } from './types'
+
+/** The subset of a Lightdash async-results response that the runner reads. */
+export interface RawQueryResult {
+  status?: string
+  error?: string
+  totalResults?: number
+  rows?: unknown[]
+  metadata?: { performance?: ServerPerformance }
+  [key: string]: unknown
+}
 
 interface RunnerClient {
   createQuery(spec: QuerySpec): Promise<string>
-  getResults(queryUuid: string, page?: number, pageSize?: number): Promise<any>
+  getResults(queryUuid: string, page?: number, pageSize?: number): Promise<RawQueryResult>
 }
 interface RunOpts { now?: () => number; sleep?: (ms: number) => Promise<void>; timeoutMs?: number; pageSize?: number }
 
@@ -27,7 +37,7 @@ export async function runSingleQuery(client: RunnerClient, spec: QuerySpec, opts
 
   const waitStart = now()
   let delay = 250
-  let result: any
+  let result: RawQueryResult
   while (true) {
     const pollStart = now()
     if (pollStart - waitStart > timeoutMs) {
@@ -39,7 +49,7 @@ export async function runSingleQuery(client: RunnerClient, spec: QuerySpec, opts
       return errorResult(submitMs, now() - t0, queryUuid, (e as Error).message)
     }
     if (result.status === READY) break
-    if (ERROR_STATES.has(result.status)) return errorResult(submitMs, now() - t0, queryUuid, result.error ?? `status: ${result.status}`)
+    if (result.status && ERROR_STATES.has(result.status)) return errorResult(submitMs, now() - t0, queryUuid, result.error ?? `status: ${result.status}`)
     await sleep(delay)
     delay = Math.min(Math.round(delay * 1.5), 2000)
   }
