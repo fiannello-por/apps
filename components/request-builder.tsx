@@ -24,7 +24,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import type { EndpointType, QuerySpec } from '@/lib/engine/types'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -538,8 +537,8 @@ function ChipField({
         {label}
         {count > 0 && <span className="font-normal text-muted-foreground">· {count} selected</span>}
       </FieldLabel>
-      <ScrollArea className="max-h-[132px] w-full">
-        <div className="flex flex-wrap gap-1.5 pr-3">
+      <div className="max-h-[176px] overflow-y-auto rounded-lg border border-border bg-muted/30 p-2">
+        <div className="flex flex-wrap gap-1.5">
           {items.map((f) => (
             <Toggle
               key={f.id}
@@ -547,13 +546,13 @@ function ChipField({
               onPressedChange={() => onToggle(f.id)}
               size="sm"
               variant="outline"
-              className="h-7 rounded-full px-3 text-[12px] font-normal aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+              className="h-7 rounded-full bg-background px-3 text-[12px] font-normal aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
             >
               {f.label}
             </Toggle>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </Field>
   )
 }
