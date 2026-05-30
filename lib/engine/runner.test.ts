@@ -48,3 +48,37 @@ test('timeout when never ready', async () => {
   const r = await runSingleQuery(client, { endpointType: 'sql', sql: 'x' }, { now, sleep: async () => {}, timeoutMs: 1000 })
   expect(r.status).toBe('timeout')
 })
+
+test('unwraps Lightdash { status: ok, results } envelope on ready', async () => {
+  const now = fakeClock([0, 100, 100, 900])
+  const client = {
+    createQuery: vi.fn().mockResolvedValue('q1'),
+    getResults: vi.fn().mockResolvedValue({
+      status: 'ok',
+      results: {
+        status: 'ready',
+        rows: [{ a: 1 }],
+        totalResults: 1,
+        metadata: { performance: { queueTimeMs: 50, initialQueryExecutionMs: 600, resultsPageExecutionMs: 120 } },
+      },
+    }),
+  } as any
+  const r = await runSingleQuery(client, { endpointType: 'sql', sql: 'x' }, { now, sleep: async () => {}, timeoutMs: 45000 })
+  expect(r.status).toBe('ok')
+  expect(r.rowCount).toBe(1)
+  expect(r.timings.warehouseExecMs).toBe(600)
+})
+
+test('surfaces a warehouse error from the enveloped results status', async () => {
+  const now = fakeClock([0, 10, 10, 20])
+  const client = {
+    createQuery: vi.fn().mockResolvedValue('q1'),
+    getResults: vi.fn().mockResolvedValue({
+      status: 'ok',
+      results: { status: 'error', error: 'Access Denied: Table sfdc.OpportunityViewTable' },
+    }),
+  } as any
+  const r = await runSingleQuery(client, { endpointType: 'sql', sql: 'x' }, { now, sleep: async () => {}, timeoutMs: 45000 })
+  expect(r.status).toBe('error')
+  expect(r.errorMessage).toContain('Access Denied')
+})
