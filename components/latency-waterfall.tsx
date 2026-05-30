@@ -1,106 +1,58 @@
-import type { PhaseTimings } from '@/lib/engine/types'
 import { toBars } from '@/lib/engine/waterfall'
+import type { PhaseTimings } from '@/lib/engine/types'
+import { cn } from '@/lib/utils'
 
-function formatMs(ms: number): string {
-  if (ms >= 1000) {
-    return `${(ms / 1000).toFixed(2)}s`
-  }
+function fmt(ms: number): string {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
   return `${Math.round(ms)}ms`
 }
 
-interface Props {
-  timings: PhaseTimings
-}
-
-export function LatencyWaterfall({ timings }: Props) {
+export function LatencyWaterfall({ timings }: { timings: PhaseTimings }) {
   const bars = toBars(timings)
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Headline stats row */}
-      <div className="flex items-baseline gap-6 pb-3 border-b border-subtle-ash">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-midtone-gray">
-            Total wall-clock
-          </span>
-          <span className="text-[22px] font-semibold leading-none text-callout-red tabular-nums">
-            {formatMs(timings.totalWallClockMs)}
-          </span>
-        </div>
-        {timings.warehouseExecMs !== null && (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-midtone-gray">
-              Warehouse
-            </span>
-            <span className="text-[17px] font-semibold leading-none text-rich-black tabular-nums">
-              {formatMs(timings.warehouseExecMs)}
-            </span>
-          </div>
-        )}
-        {timings.queueTimeMs !== null && (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-midtone-gray">
-              Queue
-            </span>
-            <span className="text-[17px] font-semibold leading-none text-rich-black tabular-nums">
-              {formatMs(timings.queueTimeMs)}
-            </span>
-          </div>
-        )}
+    <div className="flex flex-col gap-3">
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-3.5 rounded-[3px] bg-foreground" />
+          Server-reported
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-3.5 rounded-[3px] border-2 border-foreground" />
+          Client wall-clock
+        </span>
       </div>
 
-      {/* Waterfall rows */}
+      {/* Bars */}
       <div className="flex flex-col gap-2">
-        {bars.map((bar) => (
-          <div key={bar.label} className="flex items-center gap-3">
-            {/* Phase label */}
-            <span
-              className="text-[13px] font-medium text-rich-black shrink-0 text-right"
-              style={{ width: '130px' }}
-            >
-              {bar.label}
-            </span>
-
-            {/* Track */}
-            <div
-              className="relative flex-1 bg-ghost-gray rounded"
-              style={{ height: '20px' }}
-            >
-              {/* Bar */}
+        {bars.map((b) => (
+          <div key={b.label} className="flex items-center gap-3">
+            <div className="w-[104px] shrink-0 text-right text-[12px] text-muted-foreground">{b.label}</div>
+            <div className="relative h-[18px] flex-1 overflow-hidden rounded-[5px] bg-muted">
               <div
-                className={
-                  bar.source === 'server'
-                    ? 'absolute inset-y-0 bg-rich-black rounded'
-                    : 'absolute inset-y-0 bg-transparent border-2 border-rich-black rounded'
-                }
-                style={{
-                  left: `${bar.leftPct}%`,
-                  width: `${bar.widthPct}%`,
-                  minWidth: bar.widthPct > 0 ? '3px' : '0',
-                }}
+                className={cn(
+                  'absolute top-0 h-full rounded-[5px]',
+                  b.source === 'server' ? 'bg-foreground' : 'border-2 border-foreground bg-transparent',
+                )}
+                style={{ left: `${b.leftPct}%`, width: `${Math.max(b.widthPct, 0.5)}%` }}
               />
             </div>
-
-            {/* ms value */}
-            <span
-              className="text-[13px] tabular-nums text-rich-black shrink-0 text-right"
-              style={{ width: '68px' }}
-            >
-              {Math.round(bar.ms)}ms
-            </span>
+            <div className="w-[58px] shrink-0 text-right text-[12px] font-medium tabular-nums text-foreground">
+              {fmt(b.ms)}
+            </div>
           </div>
         ))}
-      </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-5 pt-2 border-t border-subtle-ash">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-3 rounded bg-rich-black" />
-          <span className="text-[12px] text-midtone-gray">Server-reported</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-3 rounded border-2 border-rich-black bg-transparent" />
-          <span className="text-[12px] text-midtone-gray">Client wall-clock</span>
+        {/* Total */}
+        <div className="mt-1 flex items-center gap-3 border-t border-border pt-2.5">
+          <div className="w-[104px] shrink-0 text-right text-[12px] font-medium text-foreground">End-to-end</div>
+          <div className="relative h-[18px] flex-1 overflow-hidden rounded-[5px] bg-muted">
+            <div className="absolute inset-0 rounded-[5px] bg-destructive/85" />
+          </div>
+          <div className="w-[58px] shrink-0 text-right text-[12px] font-semibold tabular-nums text-destructive">
+            {fmt(timings.totalWallClockMs)}
+          </div>
         </div>
       </div>
     </div>

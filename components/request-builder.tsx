@@ -6,18 +6,25 @@
    explore, or endpoint changes, before the async fetch resolves. */
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { ArrowUpRight, Info } from 'lucide-react'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Toggle } from '@/components/ui/toggle'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import type { EndpointType, QuerySpec } from '@/lib/engine/types'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -29,17 +36,14 @@ interface Connection {
   projectUuid: string
   createdAt: string
 }
-
 interface ExploreItem {
   name: string
   label: string
 }
-
 interface FieldItem {
   id: string
   label: string
 }
-
 interface ChartItem {
   uuid: string
   name: string
@@ -52,9 +56,15 @@ export interface RequestBuilderValue {
 }
 
 interface Props {
-  value?: RequestBuilderValue
   onChange: (value: RequestBuilderValue) => void
 }
+
+const ENDPOINTS: { value: EndpointType; label: string }[] = [
+  { value: 'metric_query', label: 'Metric query' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'saved_chart', label: 'Saved chart' },
+  { value: 'underlying_data', label: 'Underlying data' },
+]
 
 // ── Normalizers (defensive, handles shape uncertainty) ─────────────────────
 
@@ -75,7 +85,6 @@ function normalizeExplores(data: unknown): ExploreItem[] {
 
 function normalizeExploreFields(data: unknown): { dimensions: FieldItem[]; metrics: FieldItem[]; fallback: boolean } {
   try {
-    // Try: data.results.tables[baseTable].dimensions / .metrics
     const results = (data as Record<string, unknown>)?.results as Record<string, unknown> | undefined
     if (results && typeof results === 'object') {
       const tables = results.tables as Record<string, unknown> | undefined
@@ -90,20 +99,18 @@ function normalizeExploreFields(data: unknown): { dimensions: FieldItem[]; metri
           }
         }
       }
-      // Try: data.results.fields
       if (Array.isArray(results.fields)) {
         const all = (results.fields as Record<string, unknown>[]).map(fieldItemFromObj)
         return { dimensions: all, metrics: [], fallback: false }
       }
     }
-    // Try: data.fields (top-level)
     const topFields = (data as Record<string, unknown>)?.fields
     if (Array.isArray(topFields)) {
       const all = (topFields as Record<string, unknown>[]).map(fieldItemFromObj)
       return { dimensions: all, metrics: [], fallback: false }
     }
   } catch {
-    // ignore, fall through
+    // fall through
   }
   return { dimensions: [], metrics: [], fallback: true }
 }
@@ -138,44 +145,14 @@ function normalizeCharts(data: unknown): ChartItem[] {
   })
 }
 
-// ── Pill chip component ────────────────────────────────────────────────────
-
-function FieldChip({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string
-  selected: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-medium transition-colors cursor-pointer select-none',
-        selected
-          ? 'bg-deep-black text-canvas-white'
-          : 'bg-ghost-gray text-rich-black hover:bg-subtle-ash',
-      ].join(' ')}
-      style={{ borderRadius: '26px', height: '26px' }}
-    >
-      {label}
-    </button>
-  )
-}
-
 // ── Main component ──────────────────────────────────────────────────────────
 
-export function RequestBuilder({ value, onChange }: Props) {
+export function RequestBuilder({ onChange }: Props) {
   const [connections, setConnections] = useState<Connection[]>([])
   const [loadingConnections, setLoadingConnections] = useState(true)
+  const [connectionId, setConnectionId] = useState('')
+  const [endpointType, setEndpointType] = useState<EndpointType>('metric_query')
 
-  const [connectionId, setConnectionId] = useState<string>(value?.connectionId ?? '')
-  const [endpointType, setEndpointType] = useState<EndpointType>(value?.endpointType ?? 'metric_query')
-
-  // metric_query / underlying_data
   const [explores, setExplores] = useState<ExploreItem[]>([])
   const [loadingExplores, setLoadingExplores] = useState(false)
   const [exploreName, setExploreName] = useState('')
@@ -191,16 +168,15 @@ export function RequestBuilder({ value, onChange }: Props) {
   const [manualMets, setManualMets] = useState('')
   const [limit, setLimit] = useState('500')
 
-  // sql
   const [sql, setSql] = useState('')
 
-  // saved_chart
   const [charts, setCharts] = useState<ChartItem[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
   const [chartUuid, setChartUuid] = useState('')
 
-  // ── Load connections ────────────────────────────────────────────────────
+  const isExploreEndpoint = endpointType === 'metric_query' || endpointType === 'underlying_data'
 
+  // ── Load connections ──
   useEffect(() => {
     async function load() {
       try {
@@ -208,10 +184,7 @@ export function RequestBuilder({ value, onChange }: Props) {
         if (!res.ok) throw new Error('Failed')
         const data: Connection[] = await res.json()
         setConnections(data)
-        // pre-select first if none
-        if (!connectionId && data.length > 0) {
-          setConnectionId(data[0].id)
-        }
+        if (data.length > 0) setConnectionId((prev) => prev || data[0].id)
       } catch {
         toast.error('Could not load connections.')
       } finally {
@@ -219,28 +192,22 @@ export function RequestBuilder({ value, onChange }: Props) {
       }
     }
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Load explores when connection or tab changes ────────────────────────
-
+  // ── Load explores ──
   useEffect(() => {
-    if (!connectionId) return
-    if (endpointType !== 'metric_query' && endpointType !== 'underlying_data') return
-
+    if (!connectionId || !isExploreEndpoint) return
     setExplores([])
     setExploreName('')
     setFields({ dimensions: [], metrics: [], fallback: false })
     setSelectedDims([])
     setSelectedMets([])
     setLoadingExplores(true)
-
     async function load() {
       try {
         const res = await fetch(`/api/lightdash/explores?connectionId=${connectionId}`)
         if (!res.ok) throw new Error('Failed')
-        const data = await res.json()
-        setExplores(normalizeExplores(data))
+        setExplores(normalizeExplores(await res.json()))
       } catch {
         toast.error('Could not load explores.')
       } finally {
@@ -248,24 +215,20 @@ export function RequestBuilder({ value, onChange }: Props) {
       }
     }
     load()
-  }, [connectionId, endpointType])
+  }, [connectionId, endpointType, isExploreEndpoint])
 
-  // ── Load fields when explore is chosen ─────────────────────────────────
-
+  // ── Load fields ──
   useEffect(() => {
     if (!connectionId || !exploreName) return
-
     setFields({ dimensions: [], metrics: [], fallback: false })
     setSelectedDims([])
     setSelectedMets([])
     setLoadingFields(true)
-
     async function load() {
       try {
         const res = await fetch(`/api/lightdash/explores/${encodeURIComponent(exploreName)}?connectionId=${connectionId}`)
         if (!res.ok) throw new Error('Failed')
-        const data = await res.json()
-        setFields(normalizeExploreFields(data))
+        setFields(normalizeExploreFields(await res.json()))
       } catch {
         toast.error('Could not load explore fields.')
         setFields({ dimensions: [], metrics: [], fallback: true })
@@ -276,21 +239,17 @@ export function RequestBuilder({ value, onChange }: Props) {
     load()
   }, [connectionId, exploreName])
 
-  // ── Load charts ─────────────────────────────────────────────────────────
-
+  // ── Load charts ──
   useEffect(() => {
     if (!connectionId || endpointType !== 'saved_chart') return
-
     setCharts([])
     setChartUuid('')
     setLoadingCharts(true)
-
     async function load() {
       try {
         const res = await fetch(`/api/lightdash/charts?connectionId=${connectionId}`)
         if (!res.ok) throw new Error('Failed')
-        const data = await res.json()
-        setCharts(normalizeCharts(data))
+        setCharts(normalizeCharts(await res.json()))
       } catch {
         toast.error('Could not load charts.')
       } finally {
@@ -300,31 +259,13 @@ export function RequestBuilder({ value, onChange }: Props) {
     load()
   }, [connectionId, endpointType])
 
-  // ── Emit value changes ──────────────────────────────────────────────────
-
+  // ── Emit ──
   const buildSpec = useCallback((): QuerySpec => {
-    if (endpointType === 'sql') {
-      return { endpointType: 'sql', sql }
-    }
-    if (endpointType === 'saved_chart') {
-      return { endpointType: 'saved_chart', chartUuid }
-    }
-    // metric_query or underlying_data
-    const dimensions = fields.fallback
-      ? manualDims.split(',').map((s) => s.trim()).filter(Boolean)
-      : selectedDims
-    const metrics = fields.fallback
-      ? manualMets.split(',').map((s) => s.trim()).filter(Boolean)
-      : selectedMets
-    return {
-      endpointType,
-      query: {
-        exploreName,
-        dimensions,
-        metrics,
-        limit: parseInt(limit, 10) || 500,
-      },
-    }
+    if (endpointType === 'sql') return { endpointType: 'sql', sql }
+    if (endpointType === 'saved_chart') return { endpointType: 'saved_chart', chartUuid }
+    const dimensions = fields.fallback ? manualDims.split(',').map((s) => s.trim()).filter(Boolean) : selectedDims
+    const metrics = fields.fallback ? manualMets.split(',').map((s) => s.trim()).filter(Boolean) : selectedMets
+    return { endpointType, query: { exploreName, dimensions, metrics, limit: parseInt(limit, 10) || 500 } }
   }, [endpointType, sql, chartUuid, exploreName, selectedDims, selectedMets, manualDims, manualMets, limit, fields.fallback])
 
   useEffect(() => {
@@ -332,179 +273,140 @@ export function RequestBuilder({ value, onChange }: Props) {
     onChange({ connectionId, endpointType, spec: buildSpec() })
   }, [connectionId, endpointType, buildSpec, onChange])
 
-  // ── Toggle chip helpers ─────────────────────────────────────────────────
-
   function toggleDim(id: string) {
-    setSelectedDims((prev) =>
-      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id],
-    )
+    setSelectedDims((p) => (p.includes(id) ? p.filter((d) => d !== id) : [...p, id]))
   }
-
   function toggleMet(id: string) {
-    setSelectedMets((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
-    )
+    setSelectedMets((p) => (p.includes(id) ? p.filter((m) => m !== id) : [...p, id]))
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────
-
+  // ── Render ──
   return (
-    <div className="flex flex-col gap-4">
-      {/* Connection select */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-[13px] font-medium text-rich-black">Connection</Label>
+    <FieldGroup className="gap-5">
+      {/* Connection */}
+      <Field>
+        <FieldLabel>Connection</FieldLabel>
         {loadingConnections ? (
-          <Skeleton className="h-8 w-full rounded-[10px]" />
+          <Skeleton className="h-9 w-full rounded-lg" />
         ) : connections.length === 0 ? (
-          <p className="text-[13px] text-midtone-gray">
-            No connections yet.{' '}
-            <a href="/connections" className="underline text-rich-black">
-              Add one
-            </a>
-            .
-          </p>
+          <Alert>
+            <Info />
+            <AlertTitle>No connections yet</AlertTitle>
+            <AlertDescription>
+              <Link href="/connections" className="inline-flex items-center gap-1 font-medium text-foreground hover:underline">
+                Add a Lightdash connection <ArrowUpRight className="size-3.5" />
+              </Link>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <Select
-            value={connectionId}
-            onValueChange={(val) => {
-              if (val) setConnectionId(val)
-            }}
-          >
-            <SelectTrigger className="w-full rounded-[10px] border-subtle-ash text-[13px] h-8">
+          <Select value={connectionId} onValueChange={(v) => v && setConnectionId(v)}>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select a connection…" />
             </SelectTrigger>
             <SelectContent>
-              {connections.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-[13px]">
-                  {c.name}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {connections.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}
-      </div>
+      </Field>
 
-      {/* Endpoint type tabs */}
-      <Tabs
-        value={endpointType}
-        onValueChange={(val) => {
-          if (val) setEndpointType(val as EndpointType)
-        }}
-      >
-        <TabsList className="w-full bg-ghost-gray rounded-[10px] p-[3px] h-8">
-          <TabsTrigger value="metric_query" className="flex-1 text-[12px] rounded-[8px]">
-            Metric query
-          </TabsTrigger>
-          <TabsTrigger value="sql" className="flex-1 text-[12px] rounded-[8px]">
-            SQL
-          </TabsTrigger>
-          <TabsTrigger value="saved_chart" className="flex-1 text-[12px] rounded-[8px]">
-            Saved chart
-          </TabsTrigger>
-          <TabsTrigger value="underlying_data" className="flex-1 text-[12px] rounded-[8px]">
-            Underlying data
-          </TabsTrigger>
-        </TabsList>
+      {/* Endpoint type — segmented control */}
+      <Field>
+        <FieldLabel>Endpoint</FieldLabel>
+        <ToggleGroup
+          value={[endpointType]}
+          onValueChange={(vals) => {
+            const v = (vals as string[])[0]
+            if (v) setEndpointType(v as EndpointType)
+          }}
+          variant="outline"
+          spacing={0}
+          className="w-full"
+        >
+          {ENDPOINTS.map((e) => (
+            <ToggleGroupItem key={e.value} value={e.value} className="flex-1 text-[12.5px]">
+              {e.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Field>
 
-        {/* ── metric_query ── */}
-        <TabsContent value="metric_query">
-          <MetricQueryPanel
-            connectionId={connectionId}
-            explores={explores}
-            loadingExplores={loadingExplores}
-            exploreName={exploreName}
-            onExploreChange={setExploreName}
-            fields={fields}
-            loadingFields={loadingFields}
-            selectedDims={selectedDims}
-            selectedMets={selectedMets}
-            onToggleDim={toggleDim}
-            onToggleMet={toggleMet}
-            manualDims={manualDims}
-            manualMets={manualMets}
-            onManualDimsChange={setManualDims}
-            onManualMetsChange={setManualMets}
-            limit={limit}
-            onLimitChange={setLimit}
+      {/* Conditional panels */}
+      {isExploreEndpoint && (
+        <ExplorePanel
+          connectionId={connectionId}
+          explores={explores}
+          loadingExplores={loadingExplores}
+          exploreName={exploreName}
+          onExploreChange={setExploreName}
+          fields={fields}
+          loadingFields={loadingFields}
+          selectedDims={selectedDims}
+          selectedMets={selectedMets}
+          onToggleDim={toggleDim}
+          onToggleMet={toggleMet}
+          manualDims={manualDims}
+          manualMets={manualMets}
+          onManualDimsChange={setManualDims}
+          onManualMetsChange={setManualMets}
+          limit={limit}
+          onLimitChange={setLimit}
+        />
+      )}
+
+      {endpointType === 'sql' && (
+        <Field>
+          <FieldLabel>SQL query</FieldLabel>
+          <Textarea
+            value={sql}
+            onChange={(e) => setSql(e.target.value)}
+            placeholder="SELECT * FROM orders LIMIT 100"
+            rows={9}
+            className="resize-y font-mono text-[13px]"
           />
-        </TabsContent>
+        </Field>
+      )}
 
-        {/* ── sql ── */}
-        <TabsContent value="sql">
-          <div className="mt-3 flex flex-col gap-1.5">
-            <Label className="text-[13px] font-medium text-rich-black">SQL query</Label>
-            <textarea
-              value={sql}
-              onChange={(e) => setSql(e.target.value)}
-              placeholder="SELECT * FROM orders LIMIT 100"
-              rows={8}
-              className="w-full font-mono text-[13px] rounded-[10px] border border-subtle-ash bg-transparent px-3 py-2 text-rich-black placeholder:text-midtone-gray focus:outline-none focus:border-rich-black resize-y"
-            />
-          </div>
-        </TabsContent>
-
-        {/* ── saved_chart ── */}
-        <TabsContent value="saved_chart">
-          <div className="mt-3 flex flex-col gap-1.5">
-            <Label className="text-[13px] font-medium text-rich-black">Saved chart</Label>
-            {!connectionId ? (
-              <p className="text-[13px] text-midtone-gray">Select a connection first.</p>
-            ) : loadingCharts ? (
-              <Skeleton className="h-8 w-full rounded-[10px]" />
-            ) : charts.length === 0 ? (
-              <p className="text-[13px] text-midtone-gray">No charts found for this connection.</p>
-            ) : (
-              <Select
-                value={chartUuid}
-                onValueChange={(val) => {
-                  if (val) setChartUuid(val)
-                }}
-              >
-                <SelectTrigger className="w-full rounded-[10px] border-subtle-ash text-[13px] h-8">
-                  <SelectValue placeholder="Select a chart…" />
-                </SelectTrigger>
-                <SelectContent>
+      {endpointType === 'saved_chart' && (
+        <Field>
+          <FieldLabel>Saved chart</FieldLabel>
+          {!connectionId ? (
+            <p className="text-[13px] text-muted-foreground">Select a connection first.</p>
+          ) : loadingCharts ? (
+            <Skeleton className="h-9 w-full rounded-lg" />
+          ) : charts.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">No charts found for this connection.</p>
+          ) : (
+            <Select value={chartUuid} onValueChange={(v) => v && setChartUuid(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a chart…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
                   {charts.map((c) => (
-                    <SelectItem key={c.uuid} value={c.uuid} className="text-[13px]">
+                    <SelectItem key={c.uuid} value={c.uuid}>
                       {c.name}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* ── underlying_data ── */}
-        <TabsContent value="underlying_data">
-          <MetricQueryPanel
-            connectionId={connectionId}
-            explores={explores}
-            loadingExplores={loadingExplores}
-            exploreName={exploreName}
-            onExploreChange={setExploreName}
-            fields={fields}
-            loadingFields={loadingFields}
-            selectedDims={selectedDims}
-            selectedMets={selectedMets}
-            onToggleDim={toggleDim}
-            onToggleMet={toggleMet}
-            manualDims={manualDims}
-            manualMets={manualMets}
-            onManualDimsChange={setManualDims}
-            onManualMetsChange={setManualMets}
-            limit={limit}
-            onLimitChange={setLimit}
-          />
-        </TabsContent>
-      </Tabs>
-    </div>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
+        </Field>
+      )}
+    </FieldGroup>
   )
 }
 
-// ── MetricQueryPanel (shared by metric_query + underlying_data) ─────────────
+// ── Explore panel (metric_query + underlying_data) ─────────────────────────
 
-interface MetricQueryPanelProps {
+interface ExplorePanelProps {
   connectionId: string
   explores: ExploreItem[]
   loadingExplores: boolean
@@ -524,157 +426,134 @@ interface MetricQueryPanelProps {
   onLimitChange: (v: string) => void
 }
 
-function MetricQueryPanel({
-  connectionId,
-  explores,
-  loadingExplores,
-  exploreName,
-  onExploreChange,
-  fields,
-  loadingFields,
-  selectedDims,
-  selectedMets,
-  onToggleDim,
-  onToggleMet,
-  manualDims,
-  manualMets,
-  onManualDimsChange,
-  onManualMetsChange,
-  limit,
-  onLimitChange,
-}: MetricQueryPanelProps) {
+function ExplorePanel(p: ExplorePanelProps) {
   return (
-    <div className="mt-3 flex flex-col gap-4">
-      {/* Explore select */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-[13px] font-medium text-rich-black">Explore</Label>
-        {!connectionId ? (
-          <p className="text-[13px] text-midtone-gray">Select a connection first.</p>
-        ) : loadingExplores ? (
-          <Skeleton className="h-8 w-full rounded-[10px]" />
-        ) : explores.length === 0 ? (
-          <p className="text-[13px] text-midtone-gray">No explores found.</p>
+    <>
+      <Field>
+        <FieldLabel>Explore</FieldLabel>
+        {!p.connectionId ? (
+          <p className="text-[13px] text-muted-foreground">Select a connection first.</p>
+        ) : p.loadingExplores ? (
+          <Skeleton className="h-9 w-full rounded-lg" />
+        ) : p.explores.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">No explores found.</p>
         ) : (
-          <Select
-            value={exploreName}
-            onValueChange={(val) => {
-              if (val) onExploreChange(val)
-            }}
-          >
-            <SelectTrigger className="w-full rounded-[10px] border-subtle-ash text-[13px] h-8">
+          <Select value={p.exploreName} onValueChange={(v) => v && p.onExploreChange(v)}>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select an explore…" />
             </SelectTrigger>
             <SelectContent>
-              {explores.map((e) => (
-                <SelectItem key={e.name} value={e.name} className="text-[13px]">
-                  {e.label}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {p.explores.map((e) => (
+                  <SelectItem key={e.name} value={e.name}>
+                    {e.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}
-      </div>
+      </Field>
 
-      {/* Fields */}
-      {exploreName && (
+      {p.exploreName && (
         <>
-          {loadingFields ? (
+          {p.loadingFields ? (
             <div className="flex flex-col gap-2">
-              <Skeleton className="h-5 w-32 rounded" />
-              <Skeleton className="h-16 w-full rounded-[10px]" />
+              <Skeleton className="h-4 w-28 rounded" />
+              <Skeleton className="h-16 w-full rounded-lg" />
             </div>
-          ) : fields.fallback ? (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-[10px] border border-subtle-ash bg-ghost-gray px-3 py-2">
-                <p className="text-[12px] text-midtone-gray">
-                  Could not load fields automatically. Enter field IDs manually (comma-separated).
-                </p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-[13px] font-medium text-rich-black">Dimensions</Label>
+          ) : p.fields.fallback ? (
+            <>
+              <Alert>
+                <Info />
+                <AlertTitle>Manual field entry</AlertTitle>
+                <AlertDescription>Fields couldn&apos;t be auto-loaded. Enter field IDs, comma-separated.</AlertDescription>
+              </Alert>
+              <Field>
+                <FieldLabel>Dimensions</FieldLabel>
                 <Input
-                  value={manualDims}
-                  onChange={(e) => onManualDimsChange(e.target.value)}
-                  placeholder="orders.status, orders.created_date"
-                  className="rounded-[10px] border-subtle-ash text-[13px] h-8"
+                  value={p.manualDims}
+                  onChange={(e) => p.onManualDimsChange(e.target.value)}
+                  placeholder="orders_status, orders_created_date"
+                  className="font-mono text-[13px]"
                 />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-[13px] font-medium text-rich-black">Metrics</Label>
+              </Field>
+              <Field>
+                <FieldLabel>Metrics</FieldLabel>
                 <Input
-                  value={manualMets}
-                  onChange={(e) => onManualMetsChange(e.target.value)}
-                  placeholder="orders.revenue, orders.count"
-                  className="rounded-[10px] border-subtle-ash text-[13px] h-8"
+                  value={p.manualMets}
+                  onChange={(e) => p.onManualMetsChange(e.target.value)}
+                  placeholder="orders_total_revenue, orders_count"
+                  className="font-mono text-[13px]"
                 />
-              </div>
-            </div>
+              </Field>
+            </>
           ) : (
             <>
-              {/* Dimension chips */}
-              {fields.dimensions.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <Label className="text-[13px] font-medium text-rich-black">
-                    Dimensions{' '}
-                    {selectedDims.length > 0 && (
-                      <span className="text-midtone-gray font-normal">({selectedDims.length} selected)</span>
-                    )}
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
-                    {fields.dimensions.map((d) => (
-                      <FieldChip
-                        key={d.id}
-                        label={d.label}
-                        selected={selectedDims.includes(d.id)}
-                        onClick={() => onToggleDim(d.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
+              {p.fields.dimensions.length > 0 && (
+                <ChipField label="Dimensions" count={p.selectedDims.length} items={p.fields.dimensions} selected={p.selectedDims} onToggle={p.onToggleDim} />
               )}
-
-              {/* Metric chips */}
-              {fields.metrics.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <Label className="text-[13px] font-medium text-rich-black">
-                    Metrics{' '}
-                    {selectedMets.length > 0 && (
-                      <span className="text-midtone-gray font-normal">({selectedMets.length} selected)</span>
-                    )}
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
-                    {fields.metrics.map((m) => (
-                      <FieldChip
-                        key={m.id}
-                        label={m.label}
-                        selected={selectedMets.includes(m.id)}
-                        onClick={() => onToggleMet(m.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
+              {p.fields.metrics.length > 0 && (
+                <ChipField label="Metrics" count={p.selectedMets.length} items={p.fields.metrics} selected={p.selectedMets} onToggle={p.onToggleMet} />
               )}
-
-              {fields.dimensions.length === 0 && fields.metrics.length === 0 && (
-                <p className="text-[13px] text-midtone-gray">No fields found for this explore.</p>
+              {p.fields.dimensions.length === 0 && p.fields.metrics.length === 0 && (
+                <p className="text-[13px] text-muted-foreground">No fields found for this explore.</p>
               )}
             </>
           )}
         </>
       )}
 
-      {/* Limit */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-[13px] font-medium text-rich-black">Row limit</Label>
+      <Field>
+        <FieldLabel>Row limit</FieldLabel>
         <Input
           type="number"
           min={1}
           max={5000}
-          value={limit}
-          onChange={(e) => onLimitChange(e.target.value)}
-          className="rounded-[10px] border-subtle-ash text-[13px] h-8 w-28"
+          value={p.limit}
+          onChange={(e) => p.onLimitChange(e.target.value)}
+          className="w-32 tabular-nums"
         />
-      </div>
-    </div>
+      </Field>
+    </>
+  )
+}
+
+function ChipField({
+  label,
+  count,
+  items,
+  selected,
+  onToggle,
+}: {
+  label: string
+  count: number
+  items: FieldItem[]
+  selected: string[]
+  onToggle: (id: string) => void
+}) {
+  return (
+    <Field>
+      <FieldLabel className="flex items-center gap-1.5">
+        {label}
+        {count > 0 && <span className="font-normal text-muted-foreground">· {count} selected</span>}
+      </FieldLabel>
+      <ScrollArea className="max-h-[132px] w-full">
+        <div className="flex flex-wrap gap-1.5 pr-3">
+          {items.map((f) => (
+            <Toggle
+              key={f.id}
+              pressed={selected.includes(f.id)}
+              onPressedChange={() => onToggle(f.id)}
+              size="sm"
+              variant="outline"
+              className="h-7 rounded-full px-3 text-[12px] font-normal aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            >
+              {f.label}
+            </Toggle>
+          ))}
+        </div>
+      </ScrollArea>
+    </Field>
   )
 }
