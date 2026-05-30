@@ -1,10 +1,8 @@
-import { Button } from '@/components/ui/button'
-
 export function AuthError({ message }: { message: string }) {
   return (
     <div
       role="alert"
-      className="rounded-[9px] border border-callout-red/20 bg-callout-red/[0.04] px-3 py-2.5 text-[13px] leading-snug text-callout-red"
+      className="rounded-[10px] border border-callout-red/20 bg-callout-red/[0.04] px-3.5 py-2.5 text-[13px] leading-snug text-callout-red"
     >
       {message}
     </div>
@@ -21,22 +19,23 @@ export function GoogleButton({
   label?: string
 }) {
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
       onClick={onClick}
       disabled={loading}
-      className="h-11 w-full gap-2.5 text-[14px] font-medium"
+      className="group inline-flex h-11 w-full items-center justify-center gap-3 rounded-[10px] border border-subtle-ash bg-canvas-white text-[14px] font-medium text-rich-black shadow-[0_1px_2px_rgba(10,10,10,0.05)] transition-all duration-150 hover:border-midtone-gray/40 hover:bg-ghost-gray hover:shadow-[0_3px_10px_-4px_rgba(10,10,10,0.18)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-black/10 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <GoogleIcon />
+      <span className="grid place-items-center transition-transform duration-150 group-hover:scale-105">
+        <GoogleIcon />
+      </span>
       {loading ? 'Redirecting…' : label}
-    </Button>
+    </button>
   )
 }
 
 function GoogleIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden focusable="false">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden focusable="false">
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
