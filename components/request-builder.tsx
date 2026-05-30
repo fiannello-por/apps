@@ -117,9 +117,15 @@ function normalizeExploreFields(data: unknown): { dimensions: FieldItem[]; metri
 function fieldsFromObject(obj: unknown): FieldItem[] {
   if (!obj || typeof obj !== 'object') return []
   return Object.entries(obj as Record<string, unknown>).map(([key, val]) => {
-    const v = val as Record<string, unknown>
-    const label = typeof v?.label === 'string' ? v.label : typeof v?.name === 'string' ? v.name : key
-    return { id: key, label }
+    const v = (val ?? {}) as Record<string, unknown>
+    const name = typeof v.name === 'string' ? v.name : key
+    const table = typeof v.table === 'string' ? v.table : undefined
+    // Lightdash queryable field ids are `${table}_${name}` (e.g. orders_status).
+    // Prefer an explicit fieldId if the API already provides one.
+    const id =
+      typeof v.fieldId === 'string' ? v.fieldId : table ? `${table}_${name}` : name
+    const label = typeof v.label === 'string' ? v.label : name
+    return { id, label }
   })
 }
 
