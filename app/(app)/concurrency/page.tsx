@@ -2,10 +2,10 @@
 
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PlayIcon, XIcon, ActivityIcon } from 'lucide-react'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -16,6 +16,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
+import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
+import { PageHeader } from '@/components/page-header'
+import { StatTiles, type Stat } from '@/components/stat-tiles'
 import { RequestBuilder, type RequestBuilderValue } from '@/components/request-builder'
 import { LatencyWaterfall } from '@/components/latency-waterfall'
 import { runPool } from '@/lib/concurrency/pool'
@@ -60,30 +66,10 @@ function makeSyntheticError(errorMessage: string): ExecutionResult {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function StatCell({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string
-  value: string
-  emphasis?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 min-w-[80px]">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-midtone-gray">
-        {label}
-      </span>
-      <span
-        className={[
-          'text-[20px] font-semibold leading-none tabular-nums',
-          emphasis ? 'text-callout-red' : 'text-rich-black',
-        ].join(' ')}
-      >
-        {value}
-      </span>
-    </div>
-  )
+function StatusBadge({ status }: { status: 'ok' | 'error' | 'timeout' }) {
+  if (status === 'ok') return <Badge variant="secondary">ok</Badge>
+  if (status === 'timeout') return <Badge variant="outline">timeout</Badge>
+  return <Badge variant="destructive">error</Badge>
 }
 
 function AggregatePanel({
@@ -97,80 +83,54 @@ function AggregatePanel({
 }) {
   if (!agg || done === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-[14px] font-medium text-rich-black">No data yet</p>
-        <p className="mt-1 text-[13px] text-midtone-gray">
-          Configure a request and click Run test.
-        </p>
-      </div>
+      <Empty className="border-0 py-10">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ActivityIcon />
+          </EmptyMedia>
+          <EmptyTitle>No data yet</EmptyTitle>
+          <EmptyDescription>Configure a request and click Run test.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   }
 
+  const primaryStats: Stat[] = [
+    { label: 'p50', value: formatMs(agg.p50) },
+    { label: 'p95', value: formatMs(agg.p95), emphasis: true },
+    { label: 'p99', value: formatMs(agg.p99), emphasis: true },
+  ]
+
+  const secondaryStats: Stat[] = [
+    { label: 'Min', value: formatMs(agg.min) },
+    { label: 'Mean', value: formatMs(agg.mean) },
+    { label: 'Max', value: formatMs(agg.max), emphasis: true },
+    { label: 'Error rate', value: `${(agg.errorRate * 100).toFixed(1)}%`, emphasis: agg.errorRate > 0 },
+  ]
+
+  const progressPct = total > 0 ? (done / total) * 100 : 0
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Progress bar */}
+      {/* Progress */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-1.5 bg-ghost-gray rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-rich-black rounded-full transition-all duration-200"
-            style={{ width: `${(done / total) * 100}%` }}
+            className="h-full bg-foreground rounded-full transition-all duration-200"
+            style={{ width: `${progressPct}%` }}
           />
         </div>
-        <span className="text-[12px] tabular-nums text-midtone-gray shrink-0">
+        <span className="text-xs tabular-nums text-muted-foreground shrink-0">
           {done} / {total}
         </span>
       </div>
 
-      {/* Primary latency stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCell label="p50" value={formatMs(agg.p50)} />
-        <StatCell label="p95" value={formatMs(agg.p95)} emphasis />
-        <StatCell label="p99" value={formatMs(agg.p99)} emphasis />
-      </div>
+      {/* Primary latency row */}
+      <StatTiles stats={primaryStats} />
 
-      <Separator className="bg-subtle-ash" />
-
-      {/* Secondary latency stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCell label="Min" value={formatMs(agg.min)} />
-        <StatCell label="Mean" value={formatMs(agg.mean)} />
-        <StatCell label="Max" value={formatMs(agg.max)} emphasis />
-      </div>
-
-      <Separator className="bg-subtle-ash" />
-
-      {/* Count + error rate */}
-      <div className="grid grid-cols-2 gap-4">
-        <StatCell label="Count" value={agg.count.toString()} />
-        <StatCell
-          label="Error rate"
-          value={`${(agg.errorRate * 100).toFixed(1)}%`}
-          emphasis={agg.errorRate > 0}
-        />
-      </div>
+      {/* Secondary stats row */}
+      <StatTiles stats={secondaryStats} />
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: 'ok' | 'error' | 'timeout' }) {
-  if (status === 'ok') {
-    return (
-      <Badge className="rounded-[26px] px-2 py-0.5 text-[11px] font-medium bg-ghost-gray text-rich-black border-0">
-        ok
-      </Badge>
-    )
-  }
-  if (status === 'timeout') {
-    return (
-      <Badge className="rounded-[26px] px-2 py-0.5 text-[11px] font-medium bg-[#c22b10]/10 text-callout-red border-0">
-        timeout
-      </Badge>
-    )
-  }
-  return (
-    <Badge className="rounded-[26px] px-2 py-0.5 text-[11px] font-medium bg-[#c22b10]/10 text-callout-red border-0">
-      error
-    </Badge>
   )
 }
 
@@ -297,85 +257,75 @@ export default function ConcurrencyPage() {
       : null
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page heading */}
-      <div>
-        <h1 className="text-[18px] font-semibold tracking-[-0.45px] text-deep-black leading-[1.33]">
-          Concurrency Test
-        </h1>
-        <p className="mt-1 text-[14px] text-midtone-gray">
-          Run many parallel queries against your Lightdash instance and observe live latency
-          distributions.
-        </p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title="Concurrency Test"
+        description="Fire N queries in parallel and measure latency under load."
+      />
 
       {/* Top row: config (left) + live aggregates (right) */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Left: Request config */}
-        <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px]">
-          <CardHeader className="px-4 pt-4 pb-0">
-            <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-              Request
-            </CardTitle>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Configure card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Configure</CardTitle>
+            <CardDescription>Define the request and concurrency parameters.</CardDescription>
           </CardHeader>
-          <CardContent className="px-4 pt-3 pb-4 flex flex-col gap-5">
+          <CardContent className="flex flex-col gap-6">
             <RequestBuilder onChange={handleBuilderChange} />
 
-            <Separator className="bg-subtle-ash" />
+            <Separator />
 
-            {/* Concurrency N + Iterations */}
-            <div className="flex flex-wrap gap-5">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-[13px] font-medium text-rich-black">
-                  Concurrency (N)
-                </Label>
-                <p className="text-[12px] text-midtone-gray leading-none">
-                  Parallel queries in flight
-                </p>
-                <Input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={concurrency}
-                  onChange={(e) => setConcurrency(e.target.value)}
-                  disabled={running}
-                  className="rounded-[10px] border-subtle-ash text-[13px] h-8 w-24 mt-1"
-                />
+            <FieldGroup className="gap-4">
+              <div className="flex flex-wrap gap-6">
+                <Field className="w-28">
+                  <FieldLabel htmlFor="concurrency">Concurrency (N)</FieldLabel>
+                  <p className="text-xs text-muted-foreground -mt-1 mb-1">Parallel queries</p>
+                  <Input
+                    id="concurrency"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={concurrency}
+                    onChange={(e) => setConcurrency(e.target.value)}
+                    disabled={running}
+                  />
+                </Field>
+                <Field className="w-28">
+                  <FieldLabel htmlFor="iterations">Iterations</FieldLabel>
+                  <p className="text-xs text-muted-foreground -mt-1 mb-1">Total queries</p>
+                  <Input
+                    id="iterations"
+                    type="number"
+                    min={1}
+                    max={2000}
+                    value={iterations}
+                    onChange={(e) => setIterations(e.target.value)}
+                    disabled={running}
+                  />
+                </Field>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-[13px] font-medium text-rich-black">Iterations</Label>
-                <p className="text-[12px] text-midtone-gray leading-none">Total queries to run</p>
-                <Input
-                  type="number"
-                  min={1}
-                  max={2000}
-                  value={iterations}
-                  onChange={(e) => setIterations(e.target.value)}
-                  disabled={running}
-                  className="rounded-[10px] border-subtle-ash text-[13px] h-8 w-24 mt-1"
-                />
-              </div>
-            </div>
-
-            {/* Run button */}
-            <Button
-              disabled={!canRun}
-              onClick={handleRun}
-              className="self-start rounded-[10px] bg-deep-black text-canvas-white text-[13px] font-medium px-6 h-8 hover:bg-[#222] disabled:opacity-40"
-            >
+            </FieldGroup>
+          </CardContent>
+          <CardFooter>
+            <Button disabled={!canRun} onClick={handleRun}>
+              {running ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <PlayIcon data-icon="inline-start" />
+              )}
               {running ? `Running… (${done}/${total})` : 'Run test'}
             </Button>
-          </CardContent>
+          </CardFooter>
         </Card>
 
-        {/* Right: Live aggregates — visual focus */}
-        <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px]">
-          <CardHeader className="px-4 pt-4 pb-0">
-            <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-              Live Aggregates
-            </CardTitle>
+        {/* Live aggregates card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Live Aggregates</CardTitle>
+            <CardDescription>Latency percentiles update as results stream in.</CardDescription>
           </CardHeader>
-          <CardContent className="px-4 pt-3 pb-4">
+          <CardContent>
             <AggregatePanel agg={agg} done={done} total={total > 0 ? total : iters} />
           </CardContent>
         </Card>
@@ -383,38 +333,27 @@ export default function ConcurrencyPage() {
 
       {/* Per-run results table — only rendered once we have data */}
       {results.length > 0 && (
-        <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px]">
-          <CardHeader className="px-4 pt-4 pb-0 flex flex-row items-center justify-between">
-            <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-              Per-Run Results
-            </CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex flex-col gap-1">
+              <CardTitle>Per-Run Results</CardTitle>
+              <CardDescription>Click a row to inspect its latency waterfall.</CardDescription>
+            </div>
             {truncated && (
-              <span className="text-[12px] text-midtone-gray">
+              <Badge variant="secondary">
                 Showing {TABLE_CAP} of {sortedResults.length}
-              </span>
+              </Badge>
             )}
           </CardHeader>
-          <CardContent className="px-4 pt-3 pb-4 flex flex-col gap-4">
-            <p className="text-[12px] text-midtone-gray">
-              Click a row to inspect its latency waterfall.
-            </p>
-
-            <div className="overflow-auto max-h-[400px] rounded-[10px] border border-subtle-ash">
+          <CardContent className="flex flex-col gap-4">
+            <div className="overflow-auto max-h-[400px] rounded-lg border border-border">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-b border-subtle-ash hover:bg-transparent">
-                    <TableHead className="text-[12px] text-midtone-gray font-medium w-16">
-                      #
-                    </TableHead>
-                    <TableHead className="text-[12px] text-midtone-gray font-medium w-24">
-                      Status
-                    </TableHead>
-                    <TableHead className="text-[12px] text-midtone-gray font-medium">
-                      Wall-clock
-                    </TableHead>
-                    <TableHead className="text-[12px] text-midtone-gray font-medium">
-                      Warehouse
-                    </TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-16">#</TableHead>
+                    <TableHead className="w-24">Status</TableHead>
+                    <TableHead>Wall-clock</TableHead>
+                    <TableHead>Warehouse</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -422,25 +361,25 @@ export default function ConcurrencyPage() {
                     <TableRow
                       key={row.index}
                       className={[
-                        'border-b border-subtle-ash cursor-pointer transition-colors',
-                        selectedIndex === row.index ? 'bg-ghost-gray' : 'hover:bg-ghost-gray',
+                        'cursor-pointer',
+                        selectedIndex === row.index ? 'bg-muted' : '',
                       ].join(' ')}
                       onClick={() =>
                         setSelectedIndex(selectedIndex === row.index ? null : row.index)
                       }
                     >
-                      <TableCell className="text-[13px] tabular-nums text-midtone-gray py-2">
+                      <TableCell className="tabular-nums text-muted-foreground py-2">
                         {row.index + 1}
                       </TableCell>
                       <TableCell className="py-2">
                         <StatusBadge status={row.status} />
                       </TableCell>
-                      <TableCell className="text-[13px] tabular-nums text-rich-black py-2">
+                      <TableCell className="tabular-nums py-2">
                         {row.timings.totalWallClockMs > 0
                           ? formatMs(row.timings.totalWallClockMs)
                           : '—'}
                       </TableCell>
-                      <TableCell className="text-[13px] tabular-nums text-rich-black py-2">
+                      <TableCell className="tabular-nums py-2">
                         {row.timings.warehouseExecMs !== null
                           ? formatMs(row.timings.warehouseExecMs)
                           : '—'}
@@ -453,7 +392,7 @@ export default function ConcurrencyPage() {
 
             {/* Truncation note — explicit, not silent */}
             {truncated && (
-              <p className="text-[12px] text-midtone-gray">
+              <p className="text-xs text-muted-foreground">
                 Table capped at {TABLE_CAP} rows for performance. Showing iterations 1–{TABLE_CAP}{' '}
                 of {sortedResults.length}.
               </p>
@@ -461,25 +400,27 @@ export default function ConcurrencyPage() {
 
             {/* Expandable waterfall for selected row */}
             {selectedResult && (
-              <div className="rounded-[14px] border border-subtle-ash bg-ghost-gray p-4 flex flex-col gap-3">
+              <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-rich-black">
+                  <span className="text-sm font-semibold text-foreground">
                     Iteration #{selectedResult.index + 1} — Latency breakdown
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedIndex(null)}
-                    className="text-[12px] text-midtone-gray hover:text-rich-black transition-colors"
                   >
+                    <XIcon data-icon="inline-start" />
                     Close
-                  </button>
+                  </Button>
                 </div>
                 {selectedResult.status !== 'ok' && selectedResult.errorMessage && (
-                  <div className="rounded-[10px] border border-[#c22b10]/30 bg-[#c22b10]/5 px-3 py-2">
-                    <p className="text-[12px] text-callout-red break-words">
+                  <Alert variant="destructive">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription className="break-words">
                       {selectedResult.errorMessage}
-                    </p>
-                  </div>
+                    </AlertDescription>
+                  </Alert>
                 )}
                 <LatencyWaterfall timings={selectedResult.timings} />
               </div>
