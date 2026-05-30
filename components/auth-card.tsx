@@ -1,50 +1,10 @@
-import * as React from 'react'
-
-export function AuthCard({
-  title,
-  subtitle,
-  children,
-  footer,
-}: {
-  title: string
-  subtitle: string
-  children: React.ReactNode
-  footer?: React.ReactNode
-}) {
-  return (
-    <div className="w-full max-w-[400px] animate-in fade-in-0 slide-in-from-bottom-3 duration-500 ease-out">
-      {/* Brand */}
-      <div className="mb-8 flex flex-col items-center gap-3.5">
-        <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-deep-black shadow-[0_2px_10px_-2px_rgba(10,10,10,0.45)]">
-          <span className="font-mono text-[14px] font-semibold tracking-tight text-white">LD</span>
-        </div>
-        <div className="text-center">
-          <h1 className="text-[15px] font-semibold tracking-[-0.3px] text-deep-black">LD Perf</h1>
-          <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-midtone-gray">
-            Performance Control Plane
-          </p>
-        </div>
-      </div>
-
-      {/* Card */}
-      <div className="rounded-[14px] border border-subtle-ash bg-canvas-white p-6 shadow-[0_1px_2px_rgba(10,10,10,0.04),0_12px_32px_-16px_rgba(10,10,10,0.16)]">
-        <div className="mb-6">
-          <h2 className="text-[17px] font-semibold tracking-[-0.3px] text-deep-black">{title}</h2>
-          <p className="mt-1 text-[13px] leading-[1.5] text-midtone-gray">{subtitle}</p>
-        </div>
-        {children}
-      </div>
-
-      {footer && <div className="mt-6 text-center text-[13px] text-midtone-gray">{footer}</div>}
-    </div>
-  )
-}
+import { Button } from '@/components/ui/button'
 
 export function AuthError({ message }: { message: string }) {
   return (
     <div
       role="alert"
-      className="mb-4 rounded-[9px] border border-callout-red/20 bg-callout-red/[0.04] px-3 py-2.5 text-[13px] leading-snug text-callout-red"
+      className="rounded-[9px] border border-callout-red/20 bg-callout-red/[0.04] px-3 py-2.5 text-[13px] leading-snug text-callout-red"
     >
       {message}
     </div>
@@ -61,15 +21,16 @@ export function GoogleButton({
   label?: string
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onClick}
       disabled={loading}
-      className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-[10px] border border-subtle-ash bg-canvas-white text-[14px] font-medium text-rich-black transition-colors hover:bg-ghost-gray active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+      className="h-11 w-full gap-2.5 text-[14px] font-medium"
     >
       <GoogleIcon />
       {loading ? 'Redirecting…' : label}
-    </button>
+    </Button>
   )
 }
 
