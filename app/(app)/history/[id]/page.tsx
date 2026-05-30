@@ -3,11 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { RotateCcwIcon, AlertCircleIcon } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
+import { StatTiles, type Stat } from '@/components/stat-tiles'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
@@ -110,83 +115,17 @@ function toPhaseTimings(exec: ExecutionRow): PhaseTimings {
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function StatCell({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string
-  value: string
-  emphasis?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 min-w-[80px]">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-midtone-gray">
-        {label}
-      </span>
-      <span
-        className={[
-          'text-[20px] font-semibold leading-none tabular-nums',
-          emphasis ? 'text-callout-red' : 'text-rich-black',
-        ].join(' ')}
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
 function RunStatusBadge({ status }: { status: RunRow['status'] }) {
-  const base = 'rounded-[26px] px-2 py-0.5 text-[11px] font-medium border-0'
-  if (status === 'completed') {
-    return <Badge className={`${base} bg-ghost-gray text-rich-black`}>{status}</Badge>
-  }
-  if (status === 'running') {
-    return <Badge className={`${base} bg-ghost-gray text-midtone-gray`}>{status}</Badge>
-  }
-  return <Badge className={`${base} bg-[#c22b10]/10 text-callout-red`}>{status}</Badge>
+  if (status === 'completed') return <Badge variant="secondary">completed</Badge>
+  if (status === 'running') return <Badge variant="default">running</Badge>
+  if (status === 'partial') return <Badge variant="outline">partial</Badge>
+  return <Badge variant="destructive">{status}</Badge>
 }
 
 function ExecStatusBadge({ status }: { status: 'ok' | 'error' | 'timeout' }) {
-  const base = 'rounded-[26px] px-2 py-0.5 text-[11px] font-medium border-0'
-  if (status === 'ok') {
-    return <Badge className={`${base} bg-ghost-gray text-rich-black`}>ok</Badge>
-  }
-  return <Badge className={`${base} bg-[#c22b10]/10 text-callout-red`}>{status}</Badge>
-}
-
-function AggregatePanel({ agg }: { agg: Aggregates }) {
-  return (
-    <div className="flex flex-col gap-5">
-      {/* Primary latency stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCell label="p50" value={formatMs(agg.p50)} />
-        <StatCell label="p95" value={formatMs(agg.p95)} emphasis />
-        <StatCell label="p99" value={formatMs(agg.p99)} emphasis />
-      </div>
-
-      <Separator className="bg-subtle-ash" />
-
-      {/* Secondary latency stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCell label="Min" value={formatMs(agg.min)} />
-        <StatCell label="Mean" value={formatMs(agg.mean)} />
-        <StatCell label="Max" value={formatMs(agg.max)} emphasis />
-      </div>
-
-      <Separator className="bg-subtle-ash" />
-
-      {/* Count + error rate */}
-      <div className="grid grid-cols-2 gap-4">
-        <StatCell label="Count" value={agg.count.toString()} />
-        <StatCell
-          label="Error rate"
-          value={`${(agg.errorRate * 100).toFixed(1)}%`}
-          emphasis={agg.errorRate > 0}
-        />
-      </div>
-    </div>
-  )
+  if (status === 'ok') return <Badge variant="secondary">ok</Badge>
+  if (status === 'timeout') return <Badge variant="outline">timeout</Badge>
+  return <Badge variant="destructive">{status}</Badge>
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -199,6 +138,7 @@ export default function HistoryDetailPage() {
   const [run, setRun] = useState<RunRow | null>(null)
   const [executions, setExecutions] = useState<ExecutionRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedExecId, setSelectedExecId] = useState<string | null>(null)
   const [rerunning, setRerunning] = useState(false)
   const [rerunProgress, setRerunProgress] = useState<{ done: number; total: number } | null>(null)
@@ -216,6 +156,8 @@ export default function HistoryDetailPage() {
         if (data.executions.length === 1) {
           setSelectedExecId(data.executions[0].id)
         }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load run')
       } finally {
         setLoading(false)
       }
@@ -334,148 +276,129 @@ export default function HistoryDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <Skeleton className="h-6 w-48 rounded" />
-          <Skeleton className="mt-2 h-4 w-72 rounded" />
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-7 w-48 rounded" />
+          <Skeleton className="h-4 w-72 rounded" />
         </div>
+        <Skeleton className="h-16 rounded-xl" />
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <Skeleton className="h-48 rounded-[14px]" />
-          <Skeleton className="h-48 rounded-[14px]" />
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
         </div>
-        <Skeleton className="h-64 rounded-[14px]" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
 
-  if (!run) {
+  if (loadError || !run) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-[14px] font-medium text-rich-black">Run not found</p>
-        <p className="mt-1 text-[13px] text-midtone-gray">
-          This run may have been deleted or the ID is invalid.
-        </p>
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Run not found" />
+        <Alert variant="destructive">
+          <AlertCircleIcon />
+          <AlertTitle>Could not load run</AlertTitle>
+          <AlertDescription>
+            {loadError ?? 'This run may have been deleted or the ID is invalid.'}
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }
+
+  // ── Aggregate stats tiles ──────────────────────────────────────────────
+
+  const stats: Stat[] = run.aggregates
+    ? [
+        { label: 'p50', value: formatMs(run.aggregates.p50) },
+        { label: 'p95', value: formatMs(run.aggregates.p95), emphasis: run.aggregates.p95 > run.aggregates.p50 * 2 },
+        { label: 'p99', value: formatMs(run.aggregates.p99), emphasis: true },
+        { label: 'Error rate', value: `${(run.aggregates.errorRate * 100).toFixed(1)}%`, emphasis: run.aggregates.errorRate > 0 },
+        { label: 'Count', value: run.aggregates.count.toString() },
+        { label: 'Min', value: formatMs(run.aggregates.min) },
+        { label: 'Mean', value: formatMs(run.aggregates.mean) },
+        { label: 'Max', value: formatMs(run.aggregates.max), emphasis: true },
+      ]
+    : []
 
   // ── Main render ────────────────────────────────────────────────────────
 
+  const runTitle = `${endpointLabel(run.endpointType)} · ${run.mode === 'single' ? 'Single' : 'Concurrent'}`
+  const runDescription = [
+    run.connectionName ?? run.connectionId.slice(0, 8) + '…',
+    `${run.concurrency} × ${run.iterations} iterations`,
+    run.startedAt ? `Started ${formatDateTime(run.startedAt)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Page heading / header */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-[18px] font-semibold tracking-[-0.45px] text-deep-black leading-[1.33]">
-            Run Detail
-          </h1>
-          <RunStatusBadge status={run.status} />
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 mt-1 text-[13px] text-midtone-gray">
-          <span>
-            <span className="text-rich-black font-medium">Connection:</span>{' '}
-            {run.connectionName ?? run.connectionId.slice(0, 8) + '…'}
-          </span>
-          <span>
-            <span className="text-rich-black font-medium">Endpoint:</span>{' '}
-            {endpointLabel(run.endpointType)}
-          </span>
-          <span>
-            <span className="text-rich-black font-medium">Mode:</span>{' '}
-            <span className="capitalize">{run.mode}</span>
-          </span>
-          <span>
-            <span className="text-rich-black font-medium">N × iterations:</span>{' '}
-            {run.concurrency} × {run.iterations}
-          </span>
-          {run.startedAt && (
-            <span>
-              <span className="text-rich-black font-medium">Started:</span>{' '}
-              {formatDateTime(run.startedAt)}
-            </span>
-          )}
-          {run.finishedAt && (
-            <span>
-              <span className="text-rich-black font-medium">Finished:</span>{' '}
-              {formatDateTime(run.finishedAt)}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Top row: Aggregates (left) + Re-run (right) */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,auto)]">
-        {/* Aggregates card */}
-        <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px]">
-          <CardHeader className="px-4 pt-4 pb-0">
-            <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-              Aggregates
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pt-3 pb-4">
-            {run.aggregates ? (
-              <AggregatePanel agg={run.aggregates} />
-            ) : (
-              <p className="text-[13px] text-midtone-gray">
-                No aggregate data yet — run may still be in progress.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Re-run card */}
-        <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px] self-start">
-          <CardHeader className="px-4 pt-4 pb-0">
-            <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-              Re-run
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pt-3 pb-4 flex flex-col gap-3">
-            <p className="text-[13px] text-midtone-gray">
-              Clone this run&apos;s payload and execute it again. You&apos;ll be redirected to the new run when done.
-            </p>
+      {/* Page heading */}
+      <PageHeader
+        title={runTitle}
+        description={runDescription}
+        actions={
+          <div className="flex items-center gap-3">
+            <RunStatusBadge status={run.status} />
             <Button
               disabled={rerunning}
               onClick={handleRerun}
-              className="self-start rounded-[10px] bg-deep-black text-canvas-white text-[13px] font-medium px-6 h-8 hover:bg-[#222] disabled:opacity-40"
             >
+              {rerunning ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <RotateCcwIcon data-icon="inline-start" />
+              )}
               {rerunning
                 ? rerunProgress
                   ? `Re-running… (${rerunProgress.done}/${rerunProgress.total})`
                   : 'Re-running…'
                 : 'Re-run'}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        }
+      />
+
+      {/* Aggregate stat tiles */}
+      {run.aggregates ? (
+        <StatTiles stats={stats} />
+      ) : (
+        <Alert>
+          <AlertTitle>No aggregates yet</AlertTitle>
+          <AlertDescription>
+            Run may still be in progress. Refresh when complete to see stats.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Separator />
 
       {/* Executions table */}
-      <Card className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px]">
-        <CardHeader className="px-4 pt-4 pb-0 flex flex-row items-center justify-between">
-          <CardTitle className="text-[14px] font-semibold text-rich-black tracking-tight">
-            Executions
-          </CardTitle>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-0">
+          <CardTitle className="text-sm font-semibold">Executions</CardTitle>
           {truncated && (
-            <span className="text-[12px] text-midtone-gray">
+            <span className="text-xs text-muted-foreground tabular-nums">
               Showing {TABLE_CAP} of {executions.length}
             </span>
           )}
         </CardHeader>
         <CardContent className="px-4 pt-3 pb-4 flex flex-col gap-4">
           {executions.length > 1 && (
-            <p className="text-[12px] text-midtone-gray">
+            <p className="text-xs text-muted-foreground">
               Click a row to inspect its latency waterfall.
             </p>
           )}
 
-          <div className="overflow-auto max-h-[400px] rounded-[10px] border border-subtle-ash">
+          <div className="overflow-auto max-h-[400px] rounded-lg border border-border">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-subtle-ash hover:bg-transparent">
-                  <TableHead className="text-[12px] text-midtone-gray font-medium w-12">#</TableHead>
-                  <TableHead className="text-[12px] text-midtone-gray font-medium w-24">Status</TableHead>
-                  <TableHead className="text-[12px] text-midtone-gray font-medium">Wall-clock</TableHead>
-                  <TableHead className="text-[12px] text-midtone-gray font-medium">Warehouse</TableHead>
-                  <TableHead className="text-[12px] text-midtone-gray font-medium">Error</TableHead>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead>Wall-clock</TableHead>
+                  <TableHead>Warehouse</TableHead>
+                  <TableHead>Error</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -483,13 +406,9 @@ export default function HistoryDetailPage() {
                   <TableRow
                     key={exec.id}
                     className={[
-                      'border-b border-subtle-ash transition-colors',
+                      'transition-colors',
                       executions.length > 1 ? 'cursor-pointer' : '',
-                      selectedExecId === exec.id
-                        ? 'bg-ghost-gray'
-                        : executions.length > 1
-                          ? 'hover:bg-ghost-gray'
-                          : '',
+                      selectedExecId === exec.id ? 'bg-muted' : '',
                     ].join(' ')}
                     onClick={() => {
                       if (executions.length > 1) {
@@ -497,21 +416,21 @@ export default function HistoryDetailPage() {
                       }
                     }}
                   >
-                    <TableCell className="text-[13px] tabular-nums text-midtone-gray py-2">
+                    <TableCell className="tabular-nums text-muted-foreground py-2">
                       {exec.iterationIndex + 1}
                     </TableCell>
                     <TableCell className="py-2">
                       <ExecStatusBadge status={exec.status} />
                     </TableCell>
-                    <TableCell className="text-[13px] tabular-nums text-rich-black py-2">
+                    <TableCell className="tabular-nums py-2">
                       {exec.totalWallClockMs != null && exec.totalWallClockMs > 0
                         ? formatMs(exec.totalWallClockMs)
                         : '—'}
                     </TableCell>
-                    <TableCell className="text-[13px] tabular-nums text-rich-black py-2">
+                    <TableCell className="tabular-nums py-2">
                       {exec.warehouseExecMs != null ? formatMs(exec.warehouseExecMs) : '—'}
                     </TableCell>
-                    <TableCell className="text-[12px] text-callout-red py-2 max-w-[240px] truncate">
+                    <TableCell className="py-2 max-w-[240px] truncate text-xs text-muted-foreground">
                       {exec.errorMessage ?? ''}
                     </TableCell>
                   </TableRow>
@@ -520,39 +439,42 @@ export default function HistoryDetailPage() {
             </Table>
           </div>
 
-          {/* Truncation note — not silent */}
+          {/* Truncation note */}
           {truncated && (
-            <p className="text-[12px] text-midtone-gray">
+            <p className="text-xs text-muted-foreground">
               Table capped at {TABLE_CAP} rows. Showing iterations 1–{TABLE_CAP} of {executions.length}.
             </p>
           )}
 
           {/* Waterfall for single-run (auto-selected) or user-selected row */}
           {selectedExec && (
-            <div className="rounded-[14px] border border-subtle-ash bg-ghost-gray p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-rich-black">
+            <Card className="bg-muted">
+              <CardHeader className="px-4 pt-4 pb-0 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold">
                   Iteration #{selectedExec.iterationIndex + 1} — Latency breakdown
-                </span>
+                </CardTitle>
                 {executions.length > 1 && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedExecId(null)}
-                    className="text-[12px] text-midtone-gray hover:text-rich-black transition-colors"
                   >
                     Close
-                  </button>
+                  </Button>
                 )}
-              </div>
-              {selectedExec.status !== 'ok' && selectedExec.errorMessage && (
-                <div className="rounded-[10px] border border-[#c22b10]/30 bg-[#c22b10]/5 px-3 py-2">
-                  <p className="text-[12px] text-callout-red break-words">
-                    {selectedExec.errorMessage}
-                  </p>
-                </div>
-              )}
-              <LatencyWaterfall timings={toPhaseTimings(selectedExec)} />
-            </div>
+              </CardHeader>
+              <CardContent className="px-4 pt-3 pb-4 flex flex-col gap-3">
+                {selectedExec.status !== 'ok' && selectedExec.errorMessage && (
+                  <Alert variant="destructive">
+                    <AlertCircleIcon />
+                    <AlertDescription className="break-words">
+                      {selectedExec.errorMessage}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <LatencyWaterfall timings={toPhaseTimings(selectedExec)} />
+              </CardContent>
+            </Card>
           )}
         </CardContent>
       </Card>

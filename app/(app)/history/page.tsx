@@ -2,8 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ClockIcon } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from '@/components/ui/empty'
 import {
   Table,
   TableBody,
@@ -69,15 +79,10 @@ function endpointLabel(t: string): string {
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: RunSummary['status'] }) {
-  const base = 'rounded-[26px] px-2 py-0.5 text-[11px] font-medium border-0'
-  if (status === 'completed') {
-    return <Badge className={`${base} bg-ghost-gray text-rich-black`}>{status}</Badge>
-  }
-  if (status === 'running') {
-    return <Badge className={`${base} bg-ghost-gray text-midtone-gray`}>{status}</Badge>
-  }
-  // failed | partial
-  return <Badge className={`${base} bg-[#c22b10]/10 text-callout-red`}>{status}</Badge>
+  if (status === 'completed') return <Badge variant="secondary">completed</Badge>
+  if (status === 'running') return <Badge variant="default">running</Badge>
+  if (status === 'partial') return <Badge variant="outline">partial</Badge>
+  return <Badge variant="destructive">{status}</Badge>
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -102,36 +107,30 @@ export default function HistoryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Page heading */}
-      <div>
-        <h1 className="text-[18px] font-semibold tracking-[-0.45px] text-deep-black leading-[1.33]">
-          Run History
-        </h1>
-        <p className="mt-1 text-[14px] text-midtone-gray">
-          All past test runs, newest first. Click a row to inspect.
-        </p>
-      </div>
+      <PageHeader
+        title="History"
+        description="Every run is saved. Reopen any run's latency breakdown or re-run it."
+      />
 
-      <div className="rounded-[14px] border border-subtle-ash bg-canvas-white shadow-[oklab(0.145_-0.00000143796_0.00000340492_/_0.1)_0px_0px_0px_1px] overflow-hidden">
+      <Card className="overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-b border-subtle-ash hover:bg-transparent">
-              <TableHead className="text-[12px] text-midtone-gray font-medium px-4">Started</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">Connection</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">Endpoint</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">Mode</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">N × iters</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium tabular-nums">p50</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium tabular-nums">p95</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">Error rate</TableHead>
-              <TableHead className="text-[12px] text-midtone-gray font-medium">Status</TableHead>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="px-4">Started</TableHead>
+              <TableHead>Connection</TableHead>
+              <TableHead>Endpoint</TableHead>
+              <TableHead>Mode</TableHead>
+              <TableHead>N × iters</TableHead>
+              <TableHead className="tabular-nums">p50</TableHead>
+              <TableHead className="tabular-nums">p95</TableHead>
+              <TableHead>Error rate</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              // 5 skeleton rows
               Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i} className="border-b border-subtle-ash hover:bg-transparent">
+                <TableRow key={i} className="hover:bg-transparent">
                   {Array.from({ length: 9 }).map((__, j) => (
                     <TableCell key={j} className="py-3 px-4">
                       <Skeleton className="h-4 w-full rounded" />
@@ -140,66 +139,69 @@ export default function HistoryPage() {
                 </TableRow>
               ))
             ) : runs.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={9}
-                  className="py-16 text-center text-[14px] text-midtone-gray"
-                >
-                  No runs yet — run a query in the{' '}
-                  <Link href="/explorer" className="underline text-rich-black">
-                    Explorer
-                  </Link>{' '}
-                  or{' '}
-                  <Link href="/concurrency" className="underline text-rich-black">
-                    Concurrency
-                  </Link>{' '}
-                  page.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={9} className="py-0">
+                  <Empty className="border-0 py-16">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <ClockIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>No runs yet</EmptyTitle>
+                      <EmptyDescription>
+                        Run a query in the{' '}
+                        <Link href="/explorer">Explorer</Link>{' '}
+                        or{' '}
+                        <Link href="/concurrency">Concurrency</Link>{' '}
+                        page to see results here.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </TableCell>
               </TableRow>
             ) : (
               runs.map((run) => (
                 <TableRow
                   key={run.id}
-                  className="border-b border-subtle-ash hover:bg-ghost-gray cursor-pointer transition-colors"
+                  className="cursor-pointer transition-colors"
                 >
-                  <TableCell className="py-2.5 px-4 text-[13px] text-rich-black whitespace-nowrap">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 px-4 whitespace-nowrap">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {formatDateTime(run.startedAt)}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] text-rich-black max-w-[160px] truncate">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 max-w-[160px] truncate">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {run.connectionName ?? run.connectionId.slice(0, 8) + '…'}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] text-rich-black">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {endpointLabel(run.endpointType)}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] text-rich-black capitalize">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 capitalize">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {run.mode}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] tabular-nums text-rich-black">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 tabular-nums">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {run.concurrency} × {run.iterations}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] tabular-nums text-rich-black">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 tabular-nums">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {run.aggregates ? formatMs(run.aggregates.p50) : '—'}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-2.5 text-[13px] tabular-nums text-rich-black">
-                    <Link href={`/history/${run.id}`} className="block w-full h-full">
+                  <TableCell className="py-2.5 tabular-nums">
+                    <Link href={`/history/${run.id}`} className="block w-full h-full text-foreground">
                       {run.aggregates ? formatMs(run.aggregates.p95) : '—'}
                     </Link>
                   </TableCell>
                   <TableCell className={[
-                    'py-2.5 text-[13px] tabular-nums',
-                    run.aggregates && run.aggregates.errorRate > 0 ? 'text-callout-red' : 'text-rich-black',
+                    'py-2.5 tabular-nums',
+                    run.aggregates && run.aggregates.errorRate > 0 ? 'text-destructive' : 'text-foreground',
                   ].join(' ')}>
                     <Link href={`/history/${run.id}`} className="block w-full h-full">
                       {run.aggregates ? `${(run.aggregates.errorRate * 100).toFixed(1)}%` : '—'}
@@ -215,7 +217,7 @@ export default function HistoryPage() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </Card>
     </div>
   )
 }
