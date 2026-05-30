@@ -15,6 +15,12 @@ test('createQuery posts to the v2 metric-query endpoint with auth header and ret
   expect(url).toBe('https://ld.example.com/api/v2/projects/p1/query/metric-query')
   expect(opts.method).toBe('POST')
   expect(opts.headers.Authorization).toBe('ApiKey tok')
+  // Lightdash requires filters/sorts/tableCalculations to be present in the body.
+  const body = JSON.parse(opts.body)
+  expect(body.query.filters).toEqual({})
+  expect(body.query.sorts).toEqual([])
+  expect(body.query.tableCalculations).toEqual([])
+  expect(body.query.limit).toBe(500)
 })
 
 test('getResults fetches the results endpoint with paging', async () => {

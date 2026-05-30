@@ -20,8 +20,23 @@ export class LightdashClient {
   private bodyFor(spec: QuerySpec): any {
     switch (spec.endpointType) {
       case 'metric_query':
-      case 'underlying_data':
-        return { context: 'api', query: spec.query }
+      case 'underlying_data': {
+        const q = spec.query
+        // Lightdash's MetricQuery schema requires filters/sorts/tableCalculations
+        // to be present (even when empty), so always supply defaults.
+        return {
+          context: 'api',
+          query: {
+            exploreName: q?.exploreName,
+            dimensions: q?.dimensions ?? [],
+            metrics: q?.metrics ?? [],
+            filters: q?.filters ?? {},
+            sorts: q?.sorts ?? [],
+            limit: q?.limit ?? 500,
+            tableCalculations: q?.tableCalculations ?? [],
+          },
+        }
+      }
       case 'sql':
         return { context: 'api', sql: spec.sql }
       case 'saved_chart':
